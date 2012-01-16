@@ -1,4 +1,4 @@
-(defproject storm "0.6.1-SNAPSHOT"
+(defproject storm "0.6.2-SNAPSHOT"
   :source-path "src/clj"
   :test-path "test/clj"
   :java-source-path "src/jvm"
@@ -13,7 +13,7 @@
                  [storm/libthrift7 "0.7.0"]
                  [clj-time "0.3.0"]
                  [log4j/log4j "1.2.16"]
-                 [org.apache.zookeeper/zookeeper "3.3.2"]
+                 [com.netflix.curator/curator-framework "1.0.1"]
                  [backtype/jzmq "2.1.0"]
                  [com.googlecode.json-simple/json-simple "1.1"]
                  [com.googlecode/kryo "1.04"]
@@ -23,6 +23,7 @@
                  [org.slf4j/slf4j-log4j12 "1.5.8"]
                  [storm/carbonite "1.0.0"]
                  [org.yaml/snakeyaml "1.9"]
+                 [org.apache.httpcomponents/httpclient "4.1.1"]
                  ]
   :uberjar-exclusions [#"META-INF.*"]
   :dev-dependencies [

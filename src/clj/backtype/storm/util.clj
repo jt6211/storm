@@ -3,15 +3,18 @@
   (:import [java.util Map List Collection])
   (:import [java.io FileReader])
   (:import [backtype.storm Config])
-  (:import [backtype.storm.utils Time Container])
+  (:import [backtype.storm.utils Time Container ClojureTimerTask])
   (:import [java.util UUID])
+  (:import [java.util.zip ZipFile])
   (:import [java.util.concurrent.locks ReentrantReadWriteLock])
+  (:import [java.util.concurrent Semaphore])
   (:import [java.io File RandomAccessFile StringWriter PrintWriter])
   (:import [java.lang.management ManagementFactory])
   (:import [org.apache.commons.exec DefaultExecutor CommandLine])
   (:import [org.apache.commons.io FileUtils])
   (:import [org.apache.commons.exec ExecuteException])
   (:import [org.json.simple JSONValue])
+  (:import [clojure.lang RT])
   (:require [clojure.contrib [str-utils2 :as str]])
   (:require [clojure [set :as set]])
   (:use [clojure walk])
@@ -193,9 +196,13 @@
     (log-message "Error when trying to kill " pid ". Process is probably already dead."))
     ))
 
-(defn launch-process [command]
-  (let [command (seq (.split command " "))
-        builder (ProcessBuilder. (cons "nohup" command))]
+(defnk launch-process [command :environment {}]
+  (let [command (->> (seq (.split command " "))
+                     (filter (complement empty?)))
+        builder (ProcessBuilder. (cons "nohup" command))
+        process-env (.environment builder)]
+    (doseq [[k v] environment]
+      (.put process-env k v))
     (.start builder)
     ))
 
@@ -309,18 +316,18 @@
   (ReentrantReadWriteLock.))
 
 (defmacro read-locked [rw-lock & body]
-  `(let [rlock# (.readLock ~rw-lock)]
-      (try
-        (.lock rlock#)
-        ~@body
-      (finally (.unlock rlock#)))))
+  (let [lock (with-meta rw-lock {:tag `ReentrantReadWriteLock})]
+    `(let [rlock# (.readLock ~lock)]
+       (try (.lock rlock#)
+            ~@body
+            (finally (.unlock rlock#))))))
 
 (defmacro write-locked [rw-lock & body]
-  `(let [wlock# (.writeLock ~rw-lock)]
-      (try
-        (.lock wlock#)
-        ~@body
-      (finally (.unlock wlock#)))))
+  (let [lock (with-meta rw-lock {:tag `ReentrantReadWriteLock})]
+    `(let [wlock# (.writeLock ~lock)]
+       (try (.lock wlock#)
+            ~@body
+            (finally (.unlock wlock#))))))
 
 (defn wait-for-condition [apredicate]
   (while (not (apredicate))
@@ -528,3 +535,61 @@
 
 (defn container-get [^Container container]
   (. container object))
+
+(defn to-millis [secs]
+  (* 1000 (long secs)))
+
+(defn throw-runtime [& strs]
+  (throw (RuntimeException. (apply str strs))))
+
+(defn exception-cause? [klass ^Throwable t]
+  (->> (iterate #(.getCause ^Throwable %) t)
+       (take-while identity)
+       (some (partial instance? klass))
+       boolean))
+
+(defmacro forcat [[args aseq] & body]
+  `(mapcat (fn [~args]
+             ~@body)
+           ~aseq))
+
+(defmacro try-cause [& body]
+  (let [checker (fn [form]
+                  (or (not (sequential? form))
+                      (not= 'catch (first form))))
+        [code guards] (split-with checker body)
+        error-local (gensym "t")
+        guards (forcat [[_ klass local & guard-body] guards]
+                 `((exception-cause? ~klass ~error-local)
+                   (let [~local ~error-local]
+                     ~@guard-body
+                     )))
+        ]
+    `(try ~@code
+          (catch Throwable ~error-local
+            (cond ~@guards
+                  true (throw ~error-local)
+                  )))))
+
+(defn redirect-stdio-to-log4j! []
+  ;; set-var-root doesn't work with *out* and *err*, so digging much deeper here
+  ;; Unfortunately, this code seems to work at the REPL but not when spawned as worker processes
+  ;; it might have something to do with being a child process
+  ;; (set! (. (.getThreadBinding RT/OUT) val)
+  ;;       (java.io.OutputStreamWriter.
+  ;;         (log-stream :info "STDIO")))
+  ;; (set! (. (.getThreadBinding RT/ERR) val)
+  ;;       (PrintWriter.
+  ;;         (java.io.OutputStreamWriter.
+  ;;           (log-stream :error "STDIO"))
+  ;;         true))
+  (log-capture! "STDIO"))
+
+(defn spy [prefix val]
+  (log-message prefix ": " val)
+  val)
+
+(defn zip-contains-dir? [zipfile target]
+  (let [entries (->> zipfile (ZipFile.) .entries enumeration-seq (map (memfn getName)))]
+    (some? #(.startsWith % (str target "/")) entries)
+    ))

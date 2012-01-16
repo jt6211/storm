@@ -23,6 +23,13 @@ else:
 CONF_DIR = os.path.expanduser("~/.storm")
 STORM_DIR = "/".join(os.path.abspath( __file__ ).split("/")[:-2])
 
+if not os.path.exists(STORM_DIR + "/RELEASE"):
+  print "******************************************"
+  print "The storm client can only be run from within a release. You appear to be trying to run the client from a checkout of Storm's source code."
+  print "\nYou can download a Storm release at https://github.com/nathanmarz/storm/downloads"
+  print "******************************************"
+  sys.exit(1)  
+
 def get_jars_full(adir):
     files = os.listdir(adir)
     ret = []
@@ -54,9 +61,9 @@ def print_localconfvalue(name):
 def print_remoteconfvalue(name):
   print name + ": " + confvalue(name, [STORM_DIR + "/conf"])
 
-def exec_storm_class(klass, jvmtype="-server", childopts="", extrajars=[], args=[], prefix=""):
+def exec_storm_class(klass, jvmtype="-server", childopts="", extrajars=[], args=[]):
     nativepath = confvalue("java.library.path", extrajars)
-    command = prefix + " java " + jvmtype + " -Djava.library.path=" + nativepath + " " + childopts + " -cp " + get_classpath(extrajars) + " " + klass + " " + " ".join(args)
+    command = "java " + jvmtype + " -Djava.library.path=" + nativepath + " " + childopts + " -cp " + get_classpath(extrajars) + " " + klass + " " + " ".join(args)
     print "Running: " + command    
     os.system(command)
 
@@ -66,7 +73,7 @@ def jar(jarfile, klass, *args):
         jvmtype="-client",
         extrajars=[jarfile, CONF_DIR, STORM_DIR + "/bin"],
         args=args,
-        prefix="export STORM_JAR=" + jarfile + ";")
+        childopts="-Dstorm.jar=" + jarfile)
 
 def kill(*args):
     exec_storm_class("backtype.storm.command.kill_topology", args=args, jvmtype="-client", extrajars=[CONF_DIR, STORM_DIR + "/bin"])
@@ -76,6 +83,9 @@ def activate(*args):
 
 def deactivate(*args):
     exec_storm_class("backtype.storm.command.deactivate", args=args, jvmtype="-client", extrajars=[CONF_DIR, STORM_DIR + "/bin"])
+
+def rebalance(*args):
+    exec_storm_class("backtype.storm.command.rebalance", args=args, jvmtype="-client", extrajars=[CONF_DIR, STORM_DIR + "/bin"])
 
 def shell(resourcesdir, command, *args):
     tmpjarpath = "stormshell" + str(random.randint(0, 10000000)) + ".jar"
@@ -113,13 +123,14 @@ def print_classpath():
 COMMANDS = {"jar": jar, "kill": kill, "shell": shell, "nimbus": nimbus, "ui": ui,
             "drpc": drpc, "supervisor": supervisor, "localconfvalue": print_localconfvalue,
             "remoteconfvalue": print_remoteconfvalue, "repl": repl, "classpath": print_classpath,
-            "activate": activate, "deactivate": deactivate}
+            "activate": activate, "deactivate": deactivate, "rebalance": rebalance}
 
 def print_commands():
     global COMMANDS
     cmds = COMMANDS.keys()
     cmds.sort()
-    print "Commands:\n\t", reduce(lambda x,y: x + ', ' + y, cmds[1:], cmds[0])
+    print "Commands:\n\t", reduce(lambda x,y: x + '\n\t' + y, cmds[1:], cmds[0])
+    print "\nDocumentation for the storm client can be found at https://github.com/nathanmarz/storm/wiki/Command-line-client\n"
 
 def print_usage(msg=None):
     if msg != None:

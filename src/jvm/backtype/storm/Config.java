@@ -47,6 +47,16 @@ public class Config extends HashMap<String, Object> {
     public static String STORM_CLUSTER_MODE = "storm.cluster.mode";
 
     /**
+     * The hostname the supervisors/workers should report to nimbus. If unset, Storm will 
+     * get the hostname to report by calling <code>InetAddress.getLocalHost().getCanonicalHostName()</code>.
+     * 
+     * You should set this config when you dont have a DNS which supervisors/workers
+     * can utilize to find each other based on hostname got from calls to
+     * <code>InetAddress.getLocalHost().getCanonicalHostName()</code>.
+     */
+    public static String STORM_LOCAL_HOSTNAME = "storm.local.hostname";
+
+    /**
      * Whether or not to use ZeroMQ for messaging in local mode. If this is set 
      * to false, then Storm will use a pure-Java messaging system. The purpose 
      * of this flag is to make it easy to run Storm in local mode by eliminating 
@@ -65,6 +75,16 @@ public class Config extends HashMap<String, Object> {
      * The timeout for clients to ZooKeeper.
      */
     public static String STORM_ZOOKEEPER_SESSION_TIMEOUT = "storm.zookeeper.session.timeout";
+    
+    /**
+     * The number of times to retry a Zookeeper operation.
+     */
+    public static String STORM_ZOOKEEPER_RETRY_TIMES="storm.zookeeper.retry.times";
+    
+    /**
+     * The interval between retries of a Zookeeper operation.
+     */
+    public static String STORM_ZOOKEEPER_RETRY_INTERVAL="storm.zookeeper.retry.interval";
 
     /**
      * The id assigned to a running topology. The id is the storm name with a unique nonce appended.
@@ -155,6 +175,12 @@ public class Config extends HashMap<String, Object> {
     public static String UI_PORT = "ui.port";
 
     /**
+     * Childopts for Storm UI Java process.
+     */
+    public static String UI_CHILDOPTS = "ui.childopts";
+    
+    
+    /**
      * List of DRPC servers so that the DRPCSpout knows who to talk to.
      */
     public static String DRPC_SERVERS = "drpc.servers";
@@ -167,7 +193,14 @@ public class Config extends HashMap<String, Object> {
     /**
      * This port on Storm DRPC is used by DRPC topologies to receive function invocations and send results back. 
      */
-    public static String DRPC_INVOCATIONS_PORT = "drpc.invocations.port";    
+    public static String DRPC_INVOCATIONS_PORT = "drpc.invocations.port";  
+    
+    /**
+     * The timeout on DRPC requests within the DRPC server. Defaults to 10 minutes. Note that requests can also
+     * timeout based on the socket timeout on the DRPC client, and separately based on the topology message
+     * timeout for the topology implementing the DRPC function.
+     */
+    public static String DRPC_REQUEST_TIMEOUT_SECS  = "drpc.request.timeout.secs";  
     
     /**
      * A list of ports that can run workers on this supervisor. Each worker uses one port, and
@@ -270,6 +303,16 @@ public class Config extends HashMap<String, Object> {
     public static String TOPOLOGY_WORKERS = "topology.workers";
 
     /**
+     * How many instances to create for a spout/bolt. A task runs on a thread with zero or more
+     * other tasks for the same spout/bolt. The number of tasks for a spout/bolt is always
+     * the same throughout the lifetime of a topology, but the number of executors (threads) for 
+     * a spout/bolt can change over time. This allows a topology to scale to more or less resources 
+     * without redeploying the topology or violating the constraints of Storm (such as a fields grouping
+     * guaranteeing that the same value goes to the same task).
+     */
+    public static String TOPOLOGY_TASKS = "topology.tasks";
+
+    /**
      * How many acker tasks should be spawned for the topology. An acker task keeps
      * track of a subset of the tuples emitted by spouts and detects when a spout
      * tuple is fully processed. When an acker task detects that a spout tuple
@@ -281,7 +324,15 @@ public class Config extends HashMap<String, Object> {
      * <p>If this is set to 0, then Storm will immediately ack tuples as soon
      * as they come off the spout, effectively disabling reliability.</p>
      */
-    public static String TOPOLOGY_ACKERS = "topology.ackers";
+    public static String TOPOLOGY_ACKER_TASKS = "topology.acker.tasks";
+
+    /**
+     * How many executors to spawn for ackers.
+     *
+     * <p>If this is set to 0, then Storm will immediately ack tuples as soon
+     * as they come off the spout, effectively disabling reliability.</p>
+     */
+    public static String TOPOLOGY_ACKER_EXECUTORS = "topology.acker.executors";
 
 
     /**
@@ -330,9 +381,8 @@ public class Config extends HashMap<String, Object> {
      * Note that this config parameter has no effect for unreliable spouts that don't tag 
      * their tuples with a message id.
      */
-    public static String TOPOLOGY_MAX_SPOUT_PENDING="topology.max.spout.pending";
-
-
+    public static String TOPOLOGY_MAX_SPOUT_PENDING="topology.max.spout.pending"; 
+    
     /**
      * The maximum amount of time a component gives a source of state to synchronize before it requests
      * synchronization again.
@@ -353,6 +403,42 @@ public class Config extends HashMap<String, Object> {
      * Topology-specific options for the worker child process. This is used in addition to WORKER_CHILDOPTS.
      */
     public static String TOPOLOGY_WORKER_CHILDOPTS="topology.worker.childopts";
+
+    /**
+     * This config is available for TransactionalSpouts, and contains the id ( a String) for
+     * the transactional topology. This id is used to store the state of the transactional
+     * topology in Zookeeper.
+     */
+    public static String TOPOLOGY_TRANSACTIONAL_ID="topology.transactional.id";
+    
+    /**
+     * A list of task hooks that are automatically added to every spout and bolt in the topology. An example
+     * of when you'd do this is to add a hook that integrates with your internal 
+     * monitoring system. These hooks are instantiated using the zero-arg constructor.
+     */
+    public static String TOPOLOGY_AUTO_TASK_HOOKS="topology.auto.task.hooks";
+
+    /**
+     * Name of the topology. This config is automatically set by Storm when the topology is submitted.
+     */
+    public static String TOPOLOGY_NAME="topology.name";  
+    
+    /**
+     * The root directory in ZooKeeper for metadata about TransactionalSpouts.
+     */
+    public static String TRANSACTIONAL_ZOOKEEPER_ROOT="transactional.zookeeper.root";
+    
+    /**
+     * The list of zookeeper servers in which to keep the transactional state. If null (which is default),
+     * will use storm.zookeeper.servers
+     */
+    public static String TRANSACTIONAL_ZOOKEEPER_SERVERS="transactional.zookeeper.servers";
+
+    /**
+     * The port to use to connect to the transactional zookeeper servers. If null (which is default),
+     * will use storm.zookeeper.port
+     */
+    public static String TRANSACTIONAL_ZOOKEEPER_PORT="transactional.zookeeper.port";
     
     /**
      * The number of threads that should be used by the zeromq context in each worker process.
@@ -374,6 +460,13 @@ public class Config extends HashMap<String, Object> {
      */
     public static String JAVA_LIBRARY_PATH = "java.library.path";
     
+    /**
+     * The path to use as the zookeeper dir when running a zookeeper server via
+     * "storm dev-zookeeper". This zookeeper instance is only intended for development;
+     * it is not a production grade zookeeper setup.
+     */
+    public static String DEV_ZOOKEEPER_PATH = "dev.zookeeper.path";
+    
     public void setDebug(boolean isOn) {
         put(Config.TOPOLOGY_DEBUG, isOn);
     } 
@@ -386,8 +479,12 @@ public class Config extends HashMap<String, Object> {
         put(Config.TOPOLOGY_WORKERS, workers);
     }
     
-    public void setNumAckers(int numTasks) {
-        put(Config.TOPOLOGY_ACKERS, numTasks);
+    public void setNumAckerTasks(int numTasks) {
+        put(Config.TOPOLOGY_ACKER_TASKS, numTasks);
+    }
+
+    public void setNumAckerExecutors(int numExecutors) {
+        put(Config.TOPOLOGY_ACKER_EXECUTORS, numExecutors);
     }
     
     public void setMessageTimeoutSecs(int secs) {

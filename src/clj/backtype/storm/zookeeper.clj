@@ -7,8 +7,9 @@
             Watcher$Event$EventType KeeperException$NodeExistsException])
   (:import [org.apache.zookeeper.data Stat])
   (:import [org.apache.zookeeper.server ZooKeeperServer NIOServerCnxn$Factory])
-  (:import [java.net InetSocketAddress])
+  (:import [java.net InetSocketAddress BindException])
   (:import [java.io File])
+  (:import [backtype.storm.utils Utils])
   (:use [backtype.storm util log config]))
 
 (def zk-keeper-states
@@ -26,47 +27,43 @@
    Watcher$Event$EventType/NodeChildrenChanged :node-children-changed
   })
 
+(defn- default-watcher [state type path]
+  (log-message "Zookeeper state update: " state type path))
 
-(defn mk-client
-  ([conn-str session-timeout watcher]
-     (let [fk (CuratorFrameworkFactory/newClient
-               conn-str
-               session-timeout
-               15000
-               ;;TODO: consider making this configurable
-               (RetryNTimes. 5 1000))]
-       (.. fk
-           (getCuratorListenable)
-           (addListener
-            (reify CuratorListener
-              (^void eventReceived [this ^CuratorFramework _fk ^CuratorEvent e]
-                (when (= (.getType e) CuratorEventType/WATCHED)                  
-                  (let [^WatchedEvent event (.getWatchedEvent e)]
-                    (watcher (zk-keeper-states (.getState event))
-                             (zk-event-types (.getType event))
-                             (.getPath event))))))))
-       (.. fk
-           (getUnhandledErrorListenable)
-           (addListener
-            (reify UnhandledErrorListener
-              (unhandledError [this msg error]
-                (log-error error "Unrecoverable Zookeeper error, halting process: " msg)
-                (halt-process! 1 "Unrecoverable Zookeeper error")))))
-       (.start fk)
-       fk))
-  ([conn-str watcher]
-     (mk-client conn-str 10000 watcher))
-  ([conn-str]
-     ;; this constructor is intended for debugging
-     (mk-client
-      conn-str
-      (fn [state type path]
-        (log-message "Zookeeper state update: " state type path)))
-     ))
+(defnk mk-client [conf servers port :root "" :watcher default-watcher]
+  (let [fk (Utils/newCurator conf servers port root)]
+    (.. fk
+        (getCuratorListenable)
+        (addListener
+         (reify CuratorListener
+           (^void eventReceived [this ^CuratorFramework _fk ^CuratorEvent e]
+             (when (= (.getType e) CuratorEventType/WATCHED)                  
+               (let [^WatchedEvent event (.getWatchedEvent e)]
+                 (watcher (zk-keeper-states (.getState event))
+                          (zk-event-types (.getType event))
+                          (.getPath event))))))))
+    (.. fk
+        (getUnhandledErrorListenable)
+        (addListener
+         (reify UnhandledErrorListener
+           (unhandledError [this msg error]
+             (if (or (exception-cause? InterruptedException error)
+                     (exception-cause? java.nio.channels.ClosedByInterruptException error))
+               (do (log-warn-error error "Zookeeper exception " msg)
+                   (let [to-throw (InterruptedException.)]
+                     (.initCause to-throw error)
+                     (throw to-throw)
+                     ))
+               (do (log-error error "Unrecoverable Zookeeper error " msg)
+                   (halt-process! 1 "Unrecoverable Zookeeper error")))
+             ))))
+    (.start fk)
+    fk))
 
 (def zk-create-modes
   {:ephemeral CreateMode/EPHEMERAL
-   :persistent CreateMode/PERSISTENT})
+   :persistent CreateMode/PERSISTENT
+   :sequential CreateMode/PERSISTENT_SEQUENTIAL})
 
 (defn create-node
   ([^CuratorFramework zk ^String path ^bytes data mode]
@@ -80,14 +77,17 @@
        (.. zk (checkExists) (watched) (forPath (normalize-path path))) 
        (.. zk (checkExists) (forPath (normalize-path path))))))
 
-(defn delete-node [^CuratorFramework zk ^String path]
-  (.. zk (delete) (forPath (normalize-path path))))
+(defnk delete-node [^CuratorFramework zk ^String path :force false]
+  (try-cause  (.. zk (delete) (forPath (normalize-path path)))
+    (catch KeeperException$NoNodeException e
+      (when-not force (throw e))
+      )))
 
 (defn mkdirs [^CuratorFramework zk ^String path]
   (let [path (normalize-path path)]
     (when-not (or (= path "/") (exists-node? zk path false))
       (mkdirs zk (parent-path path))
-      (try
+      (try-cause
         (create-node zk path (barr 7) :persistent)
         (catch KeeperException$NodeExistsException e
           ;; this can happen when multiple clients doing mkdir at same time
@@ -96,7 +96,7 @@
 
 (defn get-data [^CuratorFramework zk ^String path watch?]
   (let [path (normalize-path path)]
-    (try
+    (try-cause
       (if (exists-node? zk path watch?)
         (if watch?
           (.. zk (getData) (watched) (forPath path))
@@ -125,19 +125,22 @@
                                   ))]
         (doseq [c children]
           (delete-recursive zk (full-path path c)))
-        (try-cause (delete-node zk path)
-                   (catch KeeperException$NoNodeException e
-                                  nil
-                                  ))
+        (delete-node zk path :force true)
         ))))
 
-(defn mk-inprocess-zookeeper [localdir port]
-  (log-message "Starting inprocess zookeeper at port " port " and dir " localdir)
+(defnk mk-inprocess-zookeeper [localdir :port nil]
   (let [localfile (File. localdir)
         zk (ZooKeeperServer. localfile localfile 2000)
-        factory (NIOServerCnxn$Factory. (InetSocketAddress. port))]
+        [retport factory] (loop [retport (if port port 2000)]
+                            (if-let [factory-tmp (try-cause (NIOServerCnxn$Factory. (InetSocketAddress. retport))
+                                              (catch BindException e
+                                                (when (> (inc retport) (if port port 65535))
+                                                  (throw (RuntimeException. "No port is available to launch an inprocess zookeeper.")))))]
+                              [retport factory-tmp]
+                              (recur (inc retport))))]
+    (log-message "Starting inprocess zookeeper at port " retport " and dir " localdir)    
     (.startup factory zk)
-    factory
+    [retport factory]
     ))
 
 (defn shutdown-inprocess-zookeeper [handle]

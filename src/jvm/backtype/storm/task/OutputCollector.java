@@ -11,10 +11,17 @@ import java.util.List;
  * This is the core API for emitting tuples. For a simpler API, and a more restricted
  * form of stream processing, see IBasicBolt and BasicOutputCollector.
  */
-public abstract class OutputCollector implements IOutputCollector {
-
+public class OutputCollector implements IOutputCollector {
+    private IOutputCollector _delegate;
+    
+    
+    public OutputCollector(IOutputCollector delegate) {
+        _delegate = delegate;
+    }
+    
     /**
-     * Emits a new tuple to a specific stream with a single anchor.
+     * Emits a new tuple to a specific stream with a single anchor. The emitted values must be 
+     * immutable.
      *
      * @param streamId the stream to emit to
      * @param anchor the tuple to anchor to
@@ -26,9 +33,10 @@ public abstract class OutputCollector implements IOutputCollector {
     }
 
     /**
-     * Emits a new unanchored tuple to the specified stream. Beacuse it's unanchored,
+     * Emits a new unanchored tuple to the specified stream. Because it's unanchored,
      * if a failure happens downstream, this new tuple won't affect whether any
-     * spout tuples are considered failed or not.
+     * spout tuples are considered failed or not. The emitted values must be 
+     * immutable.
      * 
      * @param streamId the stream to emit to
      * @param tuple the new output tuple from this bolt
@@ -39,7 +47,8 @@ public abstract class OutputCollector implements IOutputCollector {
     }
 
     /**
-     * Emits a new tuple to the default stream anchored on a group of input tuples.
+     * Emits a new tuple to the default stream anchored on a group of input tuples. The emitted
+     * values must be immutable.
      * 
      * @param anchors the tuples to anchor to
      * @param tuple the new output tuple from this bolt
@@ -51,7 +60,8 @@ public abstract class OutputCollector implements IOutputCollector {
 
 
     /**
-     * Emits a new tuple to the default stream anchored on a single tuple.
+     * Emits a new tuple to the default stream anchored on a single tuple. The emitted values must be 
+     * immutable.
      * 
      * @param anchor the tuple to anchor to
      * @param tuple the new output tuple from this bolt
@@ -64,7 +74,8 @@ public abstract class OutputCollector implements IOutputCollector {
     /**
      * Emits a new unanchored tuple to the default stream. Beacuse it's unanchored,
      * if a failure happens downstream, this new tuple won't affect whether any
-     * spout tuples are considered failed or not.
+     * spout tuples are considered failed or not. The emitted values must be 
+     * immutable.
      *
      * @param tuple the new output tuple from this bolt
      * @return the list of task ids that this new tuple was sent to
@@ -78,7 +89,8 @@ public abstract class OutputCollector implements IOutputCollector {
      * If the target bolt does not subscribe to this bolt using a direct grouping,
      * the tuple will not be sent. If the specified output stream is not declared
      * as direct, or the target bolt subscribes with a non-direct grouping,
-     * an error will occur at runtime.
+     * an error will occur at runtime. The emitted values must be 
+     * immutable.
      *
      * @param taskId the taskId to send the new tuple to
      * @param streamId the stream to send the tuple on. It must be declared as a direct stream in the topology definition.
@@ -96,6 +108,7 @@ public abstract class OutputCollector implements IOutputCollector {
      * as direct, or the target bolt subscribes with a non-direct grouping,
      * an error will occur at runtime. Note that this method does not use anchors,
      * so downstream failures won't affect the failure status of any spout tuples.
+     * The emitted values must be immutable.
      *
      * @param taskId the taskId to send the new tuple to
      * @param streamId the stream to send the tuple on. It must be declared as a direct stream in the topology definition.
@@ -110,7 +123,8 @@ public abstract class OutputCollector implements IOutputCollector {
      * If the target bolt does not subscribe to this bolt using a direct grouping,
      * the tuple will not be sent. If the specified output stream is not declared
      * as direct, or the target bolt subscribes with a non-direct grouping,
-     * an error will occur at runtime.
+     * an error will occur at runtime. The emitted values must be 
+     * immutable.
      *
      * <p>The default stream must be declared as direct in the topology definition.
      * See OutputDeclarer#declare for how this is done when defining topologies
@@ -129,7 +143,8 @@ public abstract class OutputCollector implements IOutputCollector {
      * If the target bolt does not subscribe to this bolt using a direct grouping,
      * the tuple will not be sent. If the specified output stream is not declared
      * as direct, or the target bolt subscribes with a non-direct grouping,
-     * an error will occur at runtime.
+     * an error will occur at runtime. The emitted values must be 
+     * immutable.
      *
      * <p>The default stream must be declared as direct in the topology definition.
      * See OutputDeclarer#declare for how this is done when defining topologies
@@ -149,7 +164,8 @@ public abstract class OutputCollector implements IOutputCollector {
      * If the target bolt does not subscribe to this bolt using a direct grouping,
      * the tuple will not be sent. If the specified output stream is not declared
      * as direct, or the target bolt subscribes with a non-direct grouping,
-     * an error will occur at runtime.
+     * an error will occur at runtime. The emitted values must be 
+     * immutable.
      *
      * <p>The default stream must be declared as direct in the topology definition.
      * See OutputDeclarer#declare for how this is done when defining topologies
@@ -163,5 +179,30 @@ public abstract class OutputCollector implements IOutputCollector {
      */
     public void emitDirect(int taskId, List<Object> tuple) {
         emitDirect(taskId, Utils.DEFAULT_STREAM_ID, tuple);
+    }
+
+    @Override
+    public List<Integer> emit(String streamId, Collection<Tuple> anchors, List<Object> tuple) {
+        return _delegate.emit(streamId, anchors, tuple);
+    }
+
+    @Override
+    public void emitDirect(int taskId, String streamId, Collection<Tuple> anchors, List<Object> tuple) {
+        _delegate.emitDirect(taskId, streamId, anchors, tuple);
+    }
+
+    @Override
+    public void ack(Tuple input) {
+        _delegate.ack(input);
+    }
+
+    @Override
+    public void fail(Tuple input) {
+        _delegate.fail(input);
+    }
+
+    @Override
+    public void reportError(Throwable error) {
+        _delegate.reportError(error);
     }
 }

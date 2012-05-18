@@ -6,13 +6,18 @@ java.library.path: "/usr/local/lib:/opt/local/lib:/usr/lib"
 ### storm.* configs are general configurations
 # the local dir is where jars are kept
 storm.local.dir: "/mnt/storm"
+storm.zookeeper.servers:
+    - "localhost"
 storm.zookeeper.port: 2181
 storm.zookeeper.root: "/storm"
 storm.zookeeper.session.timeout: 20000
+storm.zookeeper.retry.times: 5
+storm.zookeeper.retry.interval: 1000
 storm.cluster.mode: "distributed" # can be distributed or local
 storm.local.mode.zmq: false
 
 ### nimbus.* configs are for the master
+nimbus.host: "localhost"
 nimbus.thrift.port: 6627
 nimbus.childopts: "-Xmx1024m"
 nimbus.task.timeout.secs: 30
@@ -24,10 +29,17 @@ nimbus.task.launch.secs: 120
 nimbus.reassign: true
 nimbus.file.copy.expiration.secs: 600
 
+### ui.* configs are for the master
 ui.port: 8080
+ui.childopts: "-Xmx768m"
 
 drpc.port: 3772
 drpc.invocations.port: 3773
+drpc.request.timeout.secs: 600
+
+transactional.zookeeper.root: "/transactional"
+transactional.zookeeper.servers: null
+transactional.zookeeper.port: null
 
 ### supervisor.* configs are for node supervisors
 # Define the amount of workers that can be run on this machine. Each worker is assigned a port to use for communication
@@ -38,7 +50,7 @@ supervisor.slots.ports:
     - 6703
 supervisor.childopts: "-Xmx1024m"
 #how long supervisor will wait to ensure that a worker process is started
-supervisor.worker.start.timeout.secs: 240
+supervisor.worker.start.timeout.secs: 120
 #how long between heartbeats until supervisor considers that worker dead and tries to restart it
 supervisor.worker.timeout.secs: 30
 #how frequently the supervisor checks on the status of the processes it's monitoring and restarts if necessary
@@ -61,7 +73,9 @@ zmq.linger.millis: 5000
 topology.debug: false
 topology.optimize: true
 topology.workers: 1
-topology.ackers: 1
+topology.acker.executors: 1
+topology.acker.tasks: null
+topology.tasks: null
 # maximum amount of time a message has to complete before it's considered failed
 topology.message.timeout.secs: 30
 topology.skip.missing.kryo.registrations: false
@@ -71,3 +85,5 @@ topology.state.synchronization.timeout.secs: 60
 topology.stats.sample.rate: 0.05
 topology.fall.back.on.java.serialization: true
 topology.worker.childopts: null
+
+dev.zookeeper.path: "/tmp/dev-storm-zookeeper"

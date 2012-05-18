@@ -3,19 +3,27 @@
   (:import [backtype.storm Config])
   (:import [backtype.storm.utils Utils LocalState])
   (:import [org.apache.commons.io FileUtils])
-  (:require [clojure.contrib [str-utils2 :as str]])
+  (:require [clojure [string :as str]])
   (:use [backtype.storm util])
   )
 
 (def RESOURCES-SUBDIR "resources")
 
+(defn- clojure-config-name [name]
+  (.replace (.toUpperCase name) "_" "-"))
+
 ;; define clojure constants for every configuration parameter
 (doseq [f (seq (.getFields Config))]
   (let [name (.getName f)
-        new-name (.replace (.toUpperCase name) "_" "-")]
+        new-name (clojure-config-name name)]
     (eval
       `(def ~(symbol new-name) (. Config ~(symbol name))))
       ))
+
+(def ALL-CONFIGS
+  (dofor [f (seq (.getFields Config))]
+         (.get f nil)
+         ))
 
 (defn cluster-mode [conf & args]
   (keyword (conf STORM-CLUSTER-MODE)))
@@ -50,17 +58,6 @@
 ; storm.local.dir: "/mnt/storm"
 ; storm.zookeeper.port: 2181
 ; storm.zookeeper.root: "/storm"
-
-(defn mk-zk-connect-string [conf]
-  (let [servers (conf STORM-ZOOKEEPER-SERVERS)
-        port (conf STORM-ZOOKEEPER-PORT)
-        root (conf STORM-ZOOKEEPER-ROOT)]
-    (str
-      (str/join ","
-        (for [s servers]
-          (str s ":" port)))
-      root)
-    ))
 
 (defn read-default-config []
   (clojurify-structure (Utils/readDefaultConfig)))
@@ -97,16 +94,22 @@
     (FileUtils/forceMkdir (File. ret))
     ret ))
 
+(defn master-inimbus-dir [conf]
+  (str (master-local-dir conf) "/inimbus"))
+
 (defn supervisor-local-dir [conf]
   (let [ret (str (conf STORM-LOCAL-DIR) "/supervisor")]
     (FileUtils/forceMkdir (File. ret))
     ret
     ))
 
+(defn supervisor-isupervisor-dir [conf]
+  (str (supervisor-local-dir conf) "/isupervisor"))
+
 (defn supervisor-stormdist-root
   ([conf] (str (supervisor-local-dir conf) "/stormdist"))
   ([conf storm-id]
-      (str (supervisor-stormdist-root conf) "/" storm-id)))
+      (str (supervisor-stormdist-root conf) "/" (java.net.URLEncoder/encode storm-id))))
 
 (defn supervisor-stormjar-path [stormroot]
   (str stormroot "/stormjar.jar"))

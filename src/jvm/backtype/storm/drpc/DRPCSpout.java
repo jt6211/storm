@@ -6,8 +6,8 @@ import backtype.storm.generated.DRPCRequest;
 import backtype.storm.generated.DistributedRPCInvocations;
 import backtype.storm.spout.SpoutOutputCollector;
 import backtype.storm.task.TopologyContext;
-import backtype.storm.topology.IRichSpout;
 import backtype.storm.topology.OutputFieldsDeclarer;
+import backtype.storm.topology.base.BaseRichSpout;
 import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Values;
 import backtype.storm.utils.ServiceRegistry;
@@ -20,7 +20,7 @@ import org.apache.log4j.Logger;
 import org.apache.thrift7.TException;
 import org.json.simple.JSONValue;
 
-public class DRPCSpout implements IRichSpout {
+public class DRPCSpout extends BaseRichSpout {
     public static Logger LOG = Logger.getLogger(DRPCSpout.class);
     
     SpoutOutputCollector _collector;
@@ -48,12 +48,6 @@ public class DRPCSpout implements IRichSpout {
         _local_drpc_id = drpc.getServiceId();
     }
     
-    
-    @Override
-    public boolean isDistributed() {
-        return true;
-    }
-
     @Override
     public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
         _collector = collector;
@@ -63,7 +57,7 @@ public class DRPCSpout implements IRichSpout {
 
             int port = Utils.getInt(conf.get(Config.DRPC_INVOCATIONS_PORT));
             List<String> servers = (List<String>) conf.get(Config.DRPC_SERVERS);
-            if(servers.isEmpty()) {
+            if(servers == null || servers.isEmpty()) {
                 throw new RuntimeException("No DRPC servers configured for topology");   
             }
             if(numTasks < servers.size()) {

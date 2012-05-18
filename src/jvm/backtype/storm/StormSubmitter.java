@@ -8,6 +8,7 @@ import backtype.storm.utils.BufferFileInputStream;
 import backtype.storm.utils.NimbusClient;
 import backtype.storm.utils.Utils;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 import org.apache.log4j.Logger;
 import org.apache.thrift7.TException;
@@ -39,6 +40,11 @@ public class StormSubmitter {
      * @throws InvalidTopologyException if an invalid topology was submitted
      */
     public static void submitTopology(String name, Map stormConf, StormTopology topology) throws AlreadyAliveException, InvalidTopologyException {
+        if(!Utils.isValidConf(stormConf)) {
+            throw new IllegalArgumentException("Storm conf is not valid. Must be json-serializable");
+        }
+        stormConf = new HashMap(stormConf);
+        stormConf.putAll(Utils.readCommandLineOpts());
         Map conf = Utils.readStormConfig();
         conf.putAll(stormConf);
         try {
@@ -75,6 +81,9 @@ public class StormSubmitter {
     }
     
     public static String submitJar(Map conf, String localJar) {
+        if(localJar==null) {
+            throw new RuntimeException("Must submit topologies using the 'storm' client script so that StormSubmitter knows which jar to upload.");
+        }
         NimbusClient client = NimbusClient.getConfiguredClient(conf);
         try {
             String uploadLocation = client.getClient().beginFileUpload();

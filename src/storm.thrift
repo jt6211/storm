@@ -20,6 +20,12 @@ struct NullStruct {
   
 }
 
+struct GlobalStreamId {
+  1: required string componentId;
+  2: required string streamId;
+  #Going to need to add an enum for the stream type (NORMAL or FAILURE)
+}
+
 union Grouping {
   1: list<string> fields; //empty list means global grouping
   2: NullStruct shuffle; // tuple is sent to random task
@@ -28,6 +34,7 @@ union Grouping {
   5: NullStruct direct; // this bolt expects the source bolt to send tuples directly to it
   6: JavaObject custom_object;
   7: binary custom_serialized;
+  8: NullStruct local_or_shuffle; // prefer sending to tasks in the same worker process, otherwise shuffle
 }
 
 struct StreamInfo {
@@ -48,26 +55,30 @@ union ComponentObject {
 }
 
 struct ComponentCommon {
-  1: required map<string, StreamInfo> streams; //key is stream id
-  2: optional i32 parallelism_hint; //how many threads across the cluster should be dedicated to this component
+  1: required map<GlobalStreamId, Grouping> inputs;
+  2: required map<string, StreamInfo> streams; //key is stream id
+  3: optional i32 parallelism_hint; //how many threads across the cluster should be dedicated to this component
+
+  // component specific configuration respects:
+  // topology.debug: false
+  // topology.max.task.parallelism: null // can replace isDistributed with this
+  // topology.max.spout.pending: null
+  // topology.kryo.register // this is the only additive one
+  
+  // component specific configuration
+  4: optional string json_conf;
 }
 
 struct SpoutSpec {
   1: required ComponentObject spout_object;
   2: required ComponentCommon common;
-  3: required bool distributed;
-}
-
-struct GlobalStreamId {
-  1: required string componentId;
-  2: required string streamId;
-  #Going to need to add an enum for the stream type (NORMAL or FAILURE)
+  // can force a spout to be non-distributed by overriding the component configuration
+  // and setting TOPOLOGY_MAX_TASK_PARALLELISM to 1
 }
 
 struct Bolt {
-  1: required map<GlobalStreamId, Grouping> inputs; //a join would have multiple inputs
-  2: required ComponentObject bolt_object;
-  3: required ComponentCommon common;
+  1: required ComponentObject bolt_object;
+  2: required ComponentCommon common;
 }
 
 // not implemented yet
@@ -79,10 +90,10 @@ struct StateSpoutSpec {
 
 struct StormTopology {
   //ids must be unique across maps
+  // #workers to use is in conf
   1: required map<string, SpoutSpec> spouts;
   2: required map<string, Bolt> bolts;
   3: required map<string, StateSpoutSpec> state_spouts;
-  // #workers to use is in conf
 }
 
 exception AlreadyAliveException {
@@ -155,7 +166,6 @@ struct TaskSummary {
   3: required string host;
   4: required i32 port;
   5: required i32 uptime_secs;
-  6: required list<ErrorInfo> errors;
   7: optional TaskStats stats;
 }
 
@@ -165,6 +175,7 @@ struct TopologyInfo {
   3: required i32 uptime_secs;
   4: required list<TaskSummary> tasks;
   5: required string status;
+  6: required map<string, list<ErrorInfo>> errors;
 }
 
 struct KillOptions {
@@ -173,6 +184,8 @@ struct KillOptions {
 
 struct RebalanceOptions {
   1: optional i32 wait_secs;
+  2: optional i32 num_workers;
+  3: optional map<string, i32> num_executors;
 }
 
 
@@ -200,6 +213,7 @@ service Nimbus {
   //returns json
   string getTopologyConf(1: string id) throws (1: NotAliveException e);
   StormTopology getTopology(1: string id) throws (1: NotAliveException e);
+  StormTopology getUserTopology(1: string id) throws (1: NotAliveException e);
 }
 
 struct DRPCRequest {

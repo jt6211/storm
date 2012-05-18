@@ -1,7 +1,6 @@
 package backtype.storm.spout;
 
 import java.util.List;
-import backtype.storm.tuple.Tuple;
 
 public interface ISpoutOutputCollector {
     /**
@@ -9,5 +8,6 @@ public interface ISpoutOutputCollector {
     */
     List<Integer> emit(String streamId, List<Object> tuple, Object messageId);
     void emitDirect(int taskId, String streamId, List<Object> tuple, Object messageId);
+    void reportError(Throwable error);
 }
 

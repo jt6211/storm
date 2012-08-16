@@ -1,13 +1,68 @@
 ## Unreleased
 
+ * Changed debug level of "Failed message" logging to DEBUG
+ * Deprecated LinearDRPCTopologyBuilder, TimeCacheMap, and transactional topologies
+ * During "storm jar", whether topology is already running or not is checked before submitting jar to save time (thanks jasonjckn)
+ * Added BaseMultiReducer class to Trident that provides empty implementations of prepare and cleanup
+ * Bug fix: When an item is consumed off an internal buffer, the entry on the buffer is nulled to allow GC to happen on that data
+ * Bug fix: Helper class for Trident MapStates now clear their read cache when a new commit happens, preventing updates from spilling over from a failed batch attempt to the next attempt
+ * Bug fix: Fix NonTransactionalMap to take in an IBackingMap for regular values rather than TransactionalValue (thanks sjoerdmulder)
+ * Bug fix: Fix NPE when no input fields given for regular Aggregator
+ * Bug fix: Fix IndexOutOfBoundsExceptions when a bolt for global aggregation had a parallelism greater than 1 (possible with splitting, stateQuerying, and multiReduce)
+ * Bug fix: Fix "fields size" error that would sometimes occur when splitting a stream with multiple eaches
+
+## 0.8.0
+
+ * Added Trident, the new high-level abstraction for intermixing high throughput, stateful stream processing with low-latency distributed querying
+ * Added executor abstraction between workers and tasks. Workers = processes, executors = threads that run many tasks from the same spout or bolt.
+ * Pluggable scheduler (thanks xumingming)
  * Eliminate explicit storage of task->component in Zookeeper
  * Number of workers can be dynamically changed at runtime through rebalance command and -n switch
+ * Number of executors for a component can be dynamically changed at runtime through rebalance command and -e switch (multiple -e switches allowed)
  * Use worker heartbeats instead of task heartbeats (thanks xumingming)
+ * UI performance for topologies with many executors/tasks much faster due to optimized usage of Zookeeper (10x improvement)
  * Added button to show/hide system stats (e.g., acker component and stream stats) from the Storm UI (thanks xumingming)
- * Validate that subscriptions come from valid components and streams, and if its a field grouping that the schema is correct (thanks xumingming)
+ * Stats are tracked on a per-executor basis instead of per-task basis
+ * Major optimization for unreliable spouts and unanchored tuples (will use far less CPU)
+ * Revamped internals of Storm to use LMAX disruptor for internal queuing. Dramatic reductions in contention and CPU usage.
+ * Numerous micro-optimizations all throughout the codebase to reduce CPU usage.
+ * Optimized internals of Storm to use much fewer threads - two fewer threads per spout and one fewer thread per acker.
+ * Removed error method from task hooks (to be re-added at a later time)
+ * Validate that subscriptions come from valid components and streams, and if it's a field grouping that the schema is correct (thanks xumingming)
+ * MemoryTransactionalSpout now works in cluster mode
  * Only track errors on a component by component basis to reduce the amount stored in zookeeper (to speed up UI). A side effect of this change is the removal of the task page in the UI.
+ * Add TOPOLOGY-TICK-TUPLE-FREQ-SECS config to have Storm automatically send "tick" tuples to a bolt's execute method coming from the __system component and __tick stream at the configured frequency. Meant to be used as a component-specific configuration.
+ * Upgrade Kryo to v2.17
+ * Tuple is now an interface and is much cleaner. The Clojure DSL helpers have been moved to TupleImpl
+ * Added shared worker resources. Storm provides a shared ExecutorService thread pool by default. The number of threads in the pool can be configured with topology.worker.shared.thread.pool.size
+ * Improve CustomStreamGrouping interface to make it more flexible by providing more information
+ * Enhanced INimbus interface to allow for forced schedulers and better integration with global scheduler
+ * Added assigned method to ISupervisor so it knows exactly what's running and not running
+ * Custom serializers can now have one of four constructors: (), (Kryo), (Class), or (Kryo, Class)
+ * Disallow ":", ".", and "\" from topology names
+ * Errors in multilang subprocesses that go to stderr will be captured and logged to the worker logs (thanks vinodc)
+ * Workers detect and warn for missing outbound connections from assignment, drop messages for which there's no outbound connection
+ * Zookeeper connection timeout is now configurable (via storm.zookeeper.connection.timeout config)
+ * Storm is now less aggressive about halting process when there are Zookeeper errors, preferring to wait until client calls return exceptions.
+ * Can configure Zookeeper authentication for Storm's Zookeeper clients via "storm.zookeeper.auth.scheme" and "storm.zookeeper.auth.payload" configs
+ * Supervisors only download code for topologies assigned to them
+ * Include task id information in task hooks (thanks velvia)
+ * Use execvp to spawn daemons (replaces the python launcher process) (thanks ept)
+ * Expanded INimbus/ISupervisor interfaces to provide more information (used in Storm/Mesos integration)
+ * Bug fix: Realize task ids when worker heartbeats to supervisor. Some users were hitting deserialization problems here in very rare cases (thanks herberteuler)
+ * Bug fix: Fix bug where a topology's status would get corrupted to true if nimbus is restarted while status is rebalancing
 
-## 0.7.2 (unreleased but release candidate available)
+## 0.7.4
+
+ * Bug fix: Disallow slashes in topology names since it causes Nimbus to break by affecting local filesystem and zookeeper paths
+ * Bug fix: Prevent slow loading tasks from causing worker timeouts by launching the heartbeat thread before tasks are loaded
+
+## 0.7.3
+
+ * Changed debug level of "Failed message" logging to DEBUG
+ * Bug fix: Fixed critical regression in 0.7.2 that could cause workers to timeout to the supervisors or to Nimbus. 0.7.2 moved all system tasks to the same thread, so if one took a long time it would block the other critical tasks. Now different system tasks run on different threads.
+
+## 0.7.2
 
 NOTE: The change from 0.7.0 in which OutputCollector no longer assumes immutable inputs has been reverted to support optimized sending of tuples to colocated tasks
 
@@ -34,6 +89,7 @@ NOTE: The change from 0.7.0 in which OutputCollector no longer assumes immutable
  * Throw helpful error message if StormSubmitter used without using storm client script
  * Add Values class as a default serialization
  * Bug fix: give absolute piddir to subprocesses (so that relative paths can be used for storm local dir)
+ * Bug fix: Fixed critical bug in transactional topologies where a batch would be considered successful even if the batch didn't finish
  * Bug fix: Fixed critical bug in opaque transactional topologies that would lead to duplicate messages when using pipelining
  * Bug fix: Workers will now die properly if a ShellBolt subprocess dies (thanks tomo)
  * Bug fix: Hide the BasicOutputCollector#getOutputter method, since it shouldn't be a publicly available method
@@ -41,6 +97,7 @@ NOTE: The change from 0.7.0 in which OutputCollector no longer assumes immutable
  * Bug fix: Fixed NPE in CoordinatedBolt it tuples emitted, acked, or failed for a request id that has already timed out. (thanks xumingming)
  * Bug fix: UI no longer errors for topologies with no assigned tasks (thanks xumingming)
  * Bug fix: emitDirect on SpoutOutputCollector now works
+ * Bug fix: Fixed NPE when giving null parallelism hint for spout in TransactionalTopologyBuilder (thanks xumingming)
 
 ## 0.7.1
 

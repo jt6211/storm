@@ -1,7 +1,5 @@
 (ns backtype.storm.serialization-test
   (:use [clojure test])
-  (:import [java.io ByteArrayOutputStream DataOutputStream
-            ByteArrayInputStream DataInputStream])
   (:import [backtype.storm.serialization KryoTupleSerializer KryoTupleDeserializer
             KryoValuesSerializer KryoValuesDeserializer])
   (:import [backtype.storm.testing TestSerObject])
@@ -13,16 +11,13 @@
   (merge (read-default-config) extra))
 
 (defn serialize [vals conf]
-  (let [serializer (KryoValuesSerializer. (mk-conf conf))
-        bos (ByteArrayOutputStream.)]
-    (.serializeInto serializer vals bos)
-    (.toByteArray bos)
+  (let [serializer (KryoValuesSerializer. (mk-conf conf))]
+    (.serialize serializer vals)
     ))
 
 (defn deserialize [bytes conf]
-  (let [deserializer (KryoValuesDeserializer. (mk-conf conf))
-        bin (ByteArrayInputStream. bytes)]
-    (.deserializeFrom deserializer bin)
+  (let [deserializer (KryoValuesDeserializer. (mk-conf conf))]
+    (.deserialize deserializer bytes)
     ))
 
 (defn roundtrip
@@ -52,6 +47,7 @@
   (is-roundtrip ["a" "bb" "cde"])
   (is-roundtrip [(mk-string (* 64 1024))])
   (is-roundtrip [(mk-string (* 1024 1024))])
+  (is-roundtrip [(mk-string (* 1024 1024 2))])
   )
 
 (deftest test-clojure-serialization

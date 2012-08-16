@@ -40,6 +40,12 @@ public class Config extends HashMap<String, Object> {
      */
     public static String STORM_LOCAL_DIR = "storm.local.dir";
 
+    /**
+     * A global task scheduler used to assign topologies's tasks to supervisors' wokers.
+     * 
+     * If this is not set, a default system scheduler will be used.
+     */
+    public static String STORM_SCHEDULER = "storm.scheduler";
 
     /**
      * The mode this Storm cluster is running in. Either "distributed" or "local".
@@ -72,9 +78,15 @@ public class Config extends HashMap<String, Object> {
     public static String STORM_ZOOKEEPER_ROOT = "storm.zookeeper.root";
 
     /**
-     * The timeout for clients to ZooKeeper.
+     * The session timeout for clients to ZooKeeper.
      */
     public static String STORM_ZOOKEEPER_SESSION_TIMEOUT = "storm.zookeeper.session.timeout";
+
+    /**
+     * The connection timeout for clients to ZooKeeper.
+     */
+    public static String STORM_ZOOKEEPER_CONNECTION_TIMEOUT = "storm.zookeeper.connection.timeout";
+    
     
     /**
      * The number of times to retry a Zookeeper operation.
@@ -86,6 +98,16 @@ public class Config extends HashMap<String, Object> {
      */
     public static String STORM_ZOOKEEPER_RETRY_INTERVAL="storm.zookeeper.retry.interval";
 
+    /**
+     * The Zookeeper authentication scheme to use, e.g. "digest". Defaults to no authentication.
+     */
+    public static String STORM_ZOOKEEPER_AUTH_SCHEME="storm.zookeeper.auth.scheme";
+    
+    /**
+     * A string representing the payload for Zookeeper authentication. It gets serialized using UTF-8 encoding during authentication.
+     */
+    public static String STORM_ZOOKEEPER_AUTH_PAYLOAD="storm.zookeeper.auth.payload";
+    
     /**
      * The id assigned to a running topology. The id is the storm name with a unique nonce appended.
      */
@@ -203,6 +225,10 @@ public class Config extends HashMap<String, Object> {
     public static String DRPC_REQUEST_TIMEOUT_SECS  = "drpc.request.timeout.secs";  
     
     /**
+     * the metadata configed on the supervisor
+     */    
+    public static String SUPERVISOR_SCHEDULER_META = "supervisor.scheduler.meta";
+    /**
      * A list of ports that can run workers on this supervisor. Each worker uses one port, and
      * the supervisor will only run one worker per port. Use this configuration to tune
      * how many workers run on each machine.
@@ -282,6 +308,13 @@ public class Config extends HashMap<String, Object> {
     public static String TASK_REFRESH_POLL_SECS = "task.refresh.poll.secs";
 
     
+    
+    /**
+     * True if Storm should timeout messages or not. Defaults to true. This is meant to be used
+     * in unit tests to prevent tuples from being accidentally timed out during the test.
+     */
+    public static String TOPOLOGY_ENABLE_MESSAGE_TIMEOUTS = "topology.enable.message.timeouts";
+    
     /**
      * When set to true, Storm will log every message that's emitted.
      */
@@ -311,20 +344,6 @@ public class Config extends HashMap<String, Object> {
      * guaranteeing that the same value goes to the same task).
      */
     public static String TOPOLOGY_TASKS = "topology.tasks";
-
-    /**
-     * How many acker tasks should be spawned for the topology. An acker task keeps
-     * track of a subset of the tuples emitted by spouts and detects when a spout
-     * tuple is fully processed. When an acker task detects that a spout tuple
-     * is finished, it sends a message to the spout to acknowledge the tuple. The
-     * number of ackers should be scaled with the amount of throughput going
-     * through the cluster for the topology. Typically, you don't need that many
-     * ackers though.
-     *
-     * <p>If this is set to 0, then Storm will immediately ack tuples as soon
-     * as they come off the spout, effectively disabling reliability.</p>
-     */
-    public static String TOPOLOGY_ACKER_TASKS = "topology.acker.tasks";
 
     /**
      * How many executors to spawn for ackers.
@@ -418,6 +437,47 @@ public class Config extends HashMap<String, Object> {
      */
     public static String TOPOLOGY_AUTO_TASK_HOOKS="topology.auto.task.hooks";
 
+
+    /**
+     * The size of the Disruptor receive queue for each executor. Must be a power of 2.
+     */
+    public static String TOPOLOGY_EXECUTOR_RECEIVE_BUFFER_SIZE="topology.executor.receive.buffer.size";
+
+    /**
+     * The maximum number of messages to batch from the thread receiving off the network to the 
+     * executor queues. Must be a power of 2.
+     */
+    public static String TOPOLOGY_RECEIVER_BUFFER_SIZE="topology.receiver.buffer.size";
+
+    /**
+     * The size of the Disruptor send queue for each executor. Must be a power of 2.
+     */
+    public static String TOPOLOGY_EXECUTOR_SEND_BUFFER_SIZE="topology.executor.send.buffer.size";
+
+    /**
+     * The size of the Disruptor transfer queue for each worker.
+     */
+    public static String TOPOLOGY_TRANSFER_BUFFER_SIZE="topology.transfer.buffer.size";
+
+    /**
+     * How often a tick tuple from the "__system" component and "__tick" stream should be sent
+     * to tasks. Meant to be used as a component-specific configuration.
+     */
+     public static String TOPOLOGY_TICK_TUPLE_FREQ_SECS="topology.tick.tuple.freq.secs";
+
+
+    /**
+     * Configure the wait strategy used for internal queuing. Can be used to tradeoff latency
+     * vs. throughput
+     */
+     public static String TOPOLOGY_DISRUPTOR_WAIT_STRATEGY="topology.disruptor.wait.strategy";
+    
+    /**
+     * The size of the shared thread pool for worker tasks to make use of. The thread pool can be accessed 
+     * via the TopologyContext.
+     */
+     public static String TOPOLOGY_WORKER_SHARED_THREAD_POOL_SIZE="topology.worker.shared.thread.pool.size";
+
     /**
      * Name of the topology. This config is automatically set by Storm when the topology is submitted.
      */
@@ -478,12 +538,8 @@ public class Config extends HashMap<String, Object> {
     public void setNumWorkers(int workers) {
         put(Config.TOPOLOGY_WORKERS, workers);
     }
-    
-    public void setNumAckerTasks(int numTasks) {
-        put(Config.TOPOLOGY_ACKER_TASKS, numTasks);
-    }
 
-    public void setNumAckerExecutors(int numExecutors) {
+    public void setNumAckers(int numExecutors) {
         put(Config.TOPOLOGY_ACKER_EXECUTORS, numExecutors);
     }
     

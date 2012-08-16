@@ -263,22 +263,32 @@ public class Utils {
         }
     }
     
-    public static long randomLong() {
+    public static long secureRandomLong() {
         return UUID.randomUUID().getLeastSignificantBits();
     }
     
+    
     public static CuratorFramework newCurator(Map conf, List<String> servers, Object port, String root) {
+        return newCurator(conf, servers, port, root, null);
+    }
+    
+    public static CuratorFramework newCurator(Map conf, List<String> servers, Object port, String root, ZookeeperAuthInfo auth) {
         List<String> serverPorts = new ArrayList<String>();
         for(String zkServer: (List<String>) servers) {
             serverPorts.add(zkServer + ":" + Utils.getInt(port));
         }
         String zkStr = StringUtils.join(serverPorts, ",") + root; 
         try {
-            CuratorFramework ret =  CuratorFrameworkFactory.newClient(zkStr,
-                                        Utils.getInt(conf.get(Config.STORM_ZOOKEEPER_SESSION_TIMEOUT)),
-                                        15000, new RetryNTimes(Utils.getInt(conf.get(Config.STORM_ZOOKEEPER_RETRY_TIMES)),
-                                                               Utils.getInt(conf.get(Config.STORM_ZOOKEEPER_RETRY_INTERVAL))));
-            return ret;
+            
+            CuratorFrameworkFactory.Builder builder = CuratorFrameworkFactory.builder()
+                    .connectString(zkStr)
+                    .connectionTimeoutMs(Utils.getInt(conf.get(Config.STORM_ZOOKEEPER_CONNECTION_TIMEOUT)))
+                    .sessionTimeoutMs(Utils.getInt(conf.get(Config.STORM_ZOOKEEPER_SESSION_TIMEOUT)))
+                    .retryPolicy(new RetryNTimes(Utils.getInt(conf.get(Config.STORM_ZOOKEEPER_RETRY_TIMES)), Utils.getInt(conf.get(Config.STORM_ZOOKEEPER_RETRY_INTERVAL))));
+            if(auth!=null && auth.scheme!=null) {
+                builder = builder.authorization(auth.scheme, auth.payload);
+            }            
+            return builder.build();
         } catch (IOException e) {
            throw new RuntimeException(e);
         }

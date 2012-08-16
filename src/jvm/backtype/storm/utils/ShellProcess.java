@@ -2,18 +2,22 @@ package backtype.storm.utils;
 
 import backtype.storm.task.TopologyContext;
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.List;
+
+import org.apache.commons.io.IOUtils;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
 
 public class ShellProcess {
     private DataOutputStream processIn;
     private BufferedReader processOut;
+    private InputStream processErrorStream;
     private Process _subprocess;
     private String[] command;
 
@@ -28,6 +32,7 @@ public class ShellProcess {
 
         processIn = new DataOutputStream(_subprocess.getOutputStream());
         processOut = new BufferedReader(new InputStreamReader(_subprocess.getInputStream()));
+        processErrorStream = _subprocess.getErrorStream();
 
         JSONObject setupInfo = new JSONObject();
         setupInfo.put("pidDir", context.getPIDDir());
@@ -63,14 +68,37 @@ public class ShellProcess {
         }
     }
 
+    public String getErrorsString() {
+        if(processErrorStream!=null) {
+            try {
+                return IOUtils.toString(processErrorStream);
+            } catch(IOException e) {
+                return "(Unable to capture error stream)";
+            }
+        } else {
+            return "";
+        }
+    }
+
     private String readString() throws IOException {
         StringBuilder line = new StringBuilder();
 
         //synchronized (processOut) {
             while (true) {
                 String subline = processOut.readLine();
-                if(subline==null)
-                    throw new RuntimeException("Pipe to subprocess seems to be broken! Currently read output: " + line.toString());
+                if(subline==null) {
+                    StringBuilder errorMessage = new StringBuilder();
+                    errorMessage.append("Pipe to subprocess seems to be broken!");
+                    if (line.length() == 0) {
+                        errorMessage.append(" No output read.\n");
+                    }
+                    else {
+                        errorMessage.append(" Currently read output: " + line.toString() + "\n");
+                    }
+                    errorMessage.append("Shell Process Exception:\n");
+                    errorMessage.append(getErrorsString() + "\n");
+                    throw new RuntimeException(errorMessage.toString());
+                }
                 if(subline.equals("end")) {
                     break;
                 }

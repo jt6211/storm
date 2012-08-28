@@ -416,10 +416,11 @@
   "Removes file or directory at the path. Not recursive. Throws exception on failure"
   [path]
   (log-debug "Removing path " path)
-  (let [deleted? (.delete (File. path))]
-    (when-not deleted?
-      (throw (RuntimeException. (str "Failed to delete " path))))
-    ))
+  (when (exists-file? path)
+    (let [deleted? (.delete (File. path))]
+      (when-not deleted?
+        (throw (RuntimeException. (str "Failed to delete " path))))
+      )))
 
 (defn local-mkdirs
   [path]
@@ -488,8 +489,8 @@
 (defn collectify [obj]
   (if (or (sequential? obj) (instance? Collection obj)) obj [obj]))
 
-(defn to-json [^Map m]
-  (JSONValue/toJSONString m))
+(defn to-json [obj]
+  (JSONValue/toJSONString obj))
 
 (defn from-json [^String str]
   (if str

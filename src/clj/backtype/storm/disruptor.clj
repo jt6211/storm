@@ -25,7 +25,7 @@
 (defn- mk-wait-strategy [spec]
   (if (keyword? spec)
     ((WAIT-STRATEGY spec))
-    (-> (str spec) Class/forName .newInstance)
+    (-> (str spec) new-instance)
     ))
 
 ;; :block strategy requires using a timeout on waitFor (implemented in DisruptorQueue), as sometimes the consumer stays blocked even when there's an item on the queue.
@@ -46,8 +46,14 @@
 (defmacro handler [& args]
   `(clojure-handler (fn ~@args)))
 
-(defn publish [^DisruptorQueue q o]
-  (.publish q o))
+(defn publish
+  ([^DisruptorQueue q o block?]
+    (.publish q o block?))
+  ([q o]
+    (publish q o true)))
+
+(defn try-publish [^DisruptorQueue q o]
+  (.tryPublish q o))
 
 (defn consume-batch [^DisruptorQueue queue handler]
   (.consumeBatch queue handler))

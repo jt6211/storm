@@ -1,19 +1,64 @@
 ## Unreleased
 
- * Changed debug level of "Failed message" logging to DEBUG
+ * Storm UI now uses nimbus.host to find Nimbus rather than always using localhost (thanks Frostman)
+ * Added report-error! to Clojure DSL
+ * Automatically throttle errors sent to Zookeeper/Storm UI when too many are reported in a time interval (all errors are still logged) Configured with TOPOLOGY_MAX_ERROR_REPORT_PER_INTERVAL and TOPOLOGY_ERROR_THROTTLE_INTERVAL_SECS
+ * Kryo instance used for serialization can now be controlled via IKryoFactory interface and TOPOLOGY_KRYO_FACTORY config
+ * Add ability to plug in custom code into Nimbus to allow/disallow topologies to be submitted via NIMBUS_TOPOLOGY_VALIDATOR config
+ * Added TOPOLOGY_TRIDENT_BATCH_EMIT_INTERVAL_MILLIS config to control how often a batch can be emitted in a Trident topology. Defaults to 500 milliseconds. This is used to prevent too much load from being placed on Zookeeper in the case that batches are being processed super quickly.
+ * Log any topology submissions errors in nimbus.log
+ * Add static helpers in Config when using regular maps
+ * Make Trident much more memory efficient during failures by immediately removing state for failed attempts when a more recent attempt is seen
+ * Add ability to name portions of a Trident computation and have those names appear in the Storm UI
+ * Show Nimbus and topology configurations through Storm UI (thanks rnfein)
+ * Added ITupleCollection interface for TridentState's and TupleCollectionGet QueryFunction for getting the full contents of a state. MemoryMapState and LRUMemoryMapState implement this
+ * Can now submit a topology in inactive state. Storm will wait to call open/prepare on the spouts/bolts until it is first activated.
+ * Can now activate, deactive, rebalance, and kill topologies from the Storm UI (thanks Frostman)
+ * Can now use --config option to override which yaml file from ~/.storm to use for the config (thanks tjun)
+ * Redesigned the pluggable resource scheduler (INimbus, ISupervisor) interfaces to allow for much simpler integrations
+ * Added prepare method to IScheduler
+ * Added "throws Exception" to TestJob interface
+ * Added reportError to multilang protocol and updated Python and Ruby adapters to use it (thanks Lazyshot)
+ * Number tuples executed now tracked and shown in Storm UI
+ * Added ReportedFailedException which causes a batch to fail without killing worker and reports the error to the UI
+ * Execute latency now tracked and shown in Storm UI
+ * Adding testTuple methods for easily creating Tuple instances to Testing API (thanks xumingming)
+ * Trident now throws an error during construction of a topology when try to select fields that don't exist in a stream (thanks xumingming)
+ * Compute the capacity of a bolt based on execute latency and #executed over last 10 minutes and display in UI
+ * Storm UI displays exception instead of blank page when there's an error rendering the page (thanks Frostman)
+ * Added MultiScheme interface (thanks sritchie)
+ * Added MockTridentTuple for testing (thanks emblem)
+ * Updated Trident Debug filter to take in an identifier to use when logging (thanks emblem)
+ * Bug fix: Fix deadlock bug due to variant of dining philosophers problem. Spouts now use an overflow buffer to prevent blocking and guarantee that it can consume the incoming queue of acks/fails.
+ * Bug fix: Fix race condition in supervisor that would lead to supervisor continuously crashing due to not finding "stormconf.ser" file for an already killed topology
+ * Bug fix: bin/storm script now displays a helpful error message when an invalid command is specified
+  
+## 0.8.1
+
+ * Exposed Storm's unit testing facilities via the backtype.storm.Testing class. Notable functions are Testing/withLocalCluster and Testing/completeTopology (thanks xumingming)
+ * Implemented pluggable spout wait strategy that is invoked when a spout emits nothing from nextTuple or when a spout hits the MAX_SPOUT_PENDING limit
+ * Spouts now have a default wait strategy of a 1 millisecond sleep
+ * Changed log level of "Failed message" logging to DEBUG
  * Deprecated LinearDRPCTopologyBuilder, TimeCacheMap, and transactional topologies
  * During "storm jar", whether topology is already running or not is checked before submitting jar to save time (thanks jasonjckn)
  * Added BaseMultiReducer class to Trident that provides empty implementations of prepare and cleanup
+ * Added Negate builtin operation to reverse a Filter
+ * Added topology.kryo.decorators config that allows functions to be plugged in to customize Kryo (thanks jasonjckn)
+ * Enable message timeouts when using LocalCluster
+ * Multilang subprocesses can set "need_task_ids" to false when emitting tuples to tell Storm not to send task ids back (performance optimization) (thanks barrywhart)
+ * Add contains method on Tuple (thanks okapies)
+ * Added ISchemableSpout interface
  * Bug fix: When an item is consumed off an internal buffer, the entry on the buffer is nulled to allow GC to happen on that data
  * Bug fix: Helper class for Trident MapStates now clear their read cache when a new commit happens, preventing updates from spilling over from a failed batch attempt to the next attempt
  * Bug fix: Fix NonTransactionalMap to take in an IBackingMap for regular values rather than TransactionalValue (thanks sjoerdmulder)
  * Bug fix: Fix NPE when no input fields given for regular Aggregator
  * Bug fix: Fix IndexOutOfBoundsExceptions when a bolt for global aggregation had a parallelism greater than 1 (possible with splitting, stateQuerying, and multiReduce)
  * Bug fix: Fix "fields size" error that would sometimes occur when splitting a stream with multiple eaches
- * Bug fix: Fix bug where a committer spout (including opaque spouts) could cause Trident processing to halt
+ * Bug fix: Fix bug where a committer spout (including opaque spouts) could cause Trident batches to fail
  * Bug fix: Fix Trident bug where multiple groupings on same stream would cause tuples to be duplicated to all consumers
  * Bug fix: Fixed error when repartitioning stream twice in a row without any operations in between
  * Bug fix: Fix rare bug in supervisor where it would continuously fail to clean up workers because the worker was already partially cleaned up
+ * Bug fix: Fix emitDirect in storm.py
 
 ## 0.8.0
 

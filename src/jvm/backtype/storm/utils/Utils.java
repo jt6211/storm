@@ -36,6 +36,15 @@ import org.yaml.snakeyaml.Yaml;
 public class Utils {
     public static final String DEFAULT_STREAM_ID = "default";
 
+    public static Object newInstance(String klass) {
+        try {
+            Class c = Class.forName(klass);
+            return c.newInstance();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
     public static byte[] serialize(Object obj) {
         try {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -144,7 +153,13 @@ public class Utils {
 
     public static Map readStormConfig() {
         Map ret = readDefaultConfig();
-        Map storm = findAndReadConfigFile("storm.yaml", false);
+        String confFile = System.getProperty("storm.conf.file");
+        Map storm;
+        if (confFile==null || confFile.equals("")) {
+            storm = findAndReadConfigFile("storm.yaml", false);
+        } else {
+            storm = findAndReadConfigFile(confFile, true);
+        }
         ret.putAll(storm);
         ret.putAll(readCommandLineOpts());
         return ret;

@@ -97,6 +97,8 @@ public class ShellBolt implements IBolt {
                             handleAck(action);
                         } else if (command.equals("fail")) {
                             handleFail(action);
+                        } else if (command.equals("error")) {
+                            handleError(action);
                         } else if (command.equals("log")) {
                             String msg = (String) action.get("msg");
                             LOG.info("Shell msg: " + msg);
@@ -177,6 +179,11 @@ public class ShellBolt implements IBolt {
         _collector.fail(failed);
     }
 
+    private void handleError(Map action) {
+        String msg = (String) action.get("msg");
+        _collector.reportError(new Exception("Shell Process Exception: " + msg));
+    }
+
     private void handleEmit(Map action) throws InterruptedException {
         String stream = (String) action.get("stream");
         if(stream==null) stream = Utils.DEFAULT_STREAM_ID;
@@ -198,7 +205,10 @@ public class ShellBolt implements IBolt {
         }
         if(task==null) {
             List<Integer> outtasks = _collector.emit(stream, anchors, tuple);
-            _pendingWrites.put(outtasks);
+            Object need_task_ids = action.get("need_task_ids");
+            if (need_task_ids == null || ((Boolean) need_task_ids).booleanValue()) {
+                _pendingWrites.put(outtasks);
+            }
         } else {
             _collector.emitDirect((int)task.longValue(), stream, anchors, tuple);
         }

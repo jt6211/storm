@@ -10,7 +10,7 @@
                      RotatingMap RotatingMap$ExpiredCallback
                      BufferFileInputStream
                      RegisteredGlobalState ThriftTopologyUtils DisruptorQueue
-                     MutableObject]))
+                     MutableObject MutableLong]))
      (import (quote [backtype.storm.serialization KryoTupleSerializer KryoTupleDeserializer]))
      (import (quote [backtype.storm.spout ISpout SpoutOutputCollector ISpoutOutputCollector ShellSpout]))
      (import (quote [backtype.storm.tuple Tuple TupleImpl Fields MessageId]))
@@ -30,17 +30,19 @@
      (require (quote [backtype.storm [stats :as stats] [disruptor :as disruptor]]))
      (import (quote [org.apache.log4j PropertyConfigurator Logger]))
 
+     (import (quote [com.lmax.disruptor InsufficientCapacityException]))
      (import (quote [backtype.storm.generated Nimbus Nimbus$Processor
                      Nimbus$Iface StormTopology ShellComponent
                      NotAliveException AlreadyAliveException GlobalStreamId
                      InvalidTopologyException ClusterSummary TopologyInfo
                      TopologySummary ExecutorSummary ExecutorStats ExecutorSpecificStats
                      SpoutStats BoltStats ErrorInfo SupervisorSummary ExecutorInfo
-                     KillOptions RebalanceOptions JavaObject JavaObjectArg]))
+                     KillOptions SubmitOptions RebalanceOptions JavaObject JavaObjectArg
+                     TopologyInitialStatus]))
      (import (quote [backtype.storm.daemon.common StormBase Assignment
                      SupervisorInfo WorkerHeartbeat]))
      (import (quote [backtype.storm.grouping CustomStreamGrouping]))
      (import (quote [java.io File FileOutputStream FileInputStream]))
-     (import (quote [java.util Collection List Random Map HashMap Collections ArrayList]))
+     (import (quote [java.util Collection List Random Map HashMap Collections ArrayList LinkedList]))
      (import (quote [org.apache.commons.io FileUtils]))
      ))

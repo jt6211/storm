@@ -1,4 +1,9 @@
-(defproject storm "0.8.1-wip7"
+(def lein-version (System/getenv "LEIN_VERSION"))
+(if-not (re-find #"^1\..*$" lein-version)
+  (do (println (str "ERROR: requires Leiningen 1.x but you are using " lein-version))
+    (System/exit 1)))
+
+(defproject storm "0.8.2-wip15"
   :source-path "src/clj"
   :test-path "test/clj"
   :java-source-path "src/jvm"

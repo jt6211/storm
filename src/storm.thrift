@@ -122,7 +122,8 @@ struct SupervisorSummary {
   1: required string host;
   2: required i32 uptime_secs;
   3: required i32 num_workers;
-  4: required i32 num_used_workers;  
+  4: required i32 num_used_workers;
+  5: required string supervisor_id;
 }
 
 struct ClusterSummary {
@@ -140,6 +141,8 @@ struct BoltStats {
   1: required map<string, map<GlobalStreamId, i64>> acked;  
   2: required map<string, map<GlobalStreamId, i64>> failed;  
   3: required map<string, map<GlobalStreamId, double>> process_ms_avg;
+  4: required map<string, map<GlobalStreamId, i64>> executed;  
+  5: required map<string, map<GlobalStreamId, double>> execute_ms_avg;
 }
 
 struct SpoutStats {
@@ -194,9 +197,17 @@ struct RebalanceOptions {
   3: optional map<string, i32> num_executors;
 }
 
+enum TopologyInitialStatus {
+    ACTIVE = 1,
+    INACTIVE = 2
+}
+struct SubmitOptions {
+  1: required TopologyInitialStatus initial_status;
+}
 
 service Nimbus {
   void submitTopology(1: string name, 2: string uploadedJarLocation, 3: string jsonConf, 4: StormTopology topology) throws (1: AlreadyAliveException e, 2: InvalidTopologyException ite);
+  void submitTopologyWithOpts(1: string name, 2: string uploadedJarLocation, 3: string jsonConf, 4: StormTopology topology, 5: SubmitOptions options) throws (1: AlreadyAliveException e, 2: InvalidTopologyException ite);
   void killTopology(1: string name) throws (1: NotAliveException e);
   void killTopologyWithOpts(1: string name, 2: KillOptions options) throws (1: NotAliveException e);
   void activate(1: string name) throws (1: NotAliveException e);
@@ -212,7 +223,9 @@ service Nimbus {
   string beginFileDownload(1: string file);
   //can stop downloading chunks when receive 0-length byte array back
   binary downloadChunk(1: string id);
-  
+
+  // returns json
+  string getNimbusConf();
   // stats functions
   ClusterSummary getClusterInfo();
   TopologyInfo getTopologyInfo(1: string id) throws (1: NotAliveException e);

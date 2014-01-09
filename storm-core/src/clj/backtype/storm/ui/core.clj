@@ -1,3 +1,18 @@
+;; Licensed to the Apache Software Foundation (ASF) under one
+;; or more contributor license agreements.  See the NOTICE file
+;; distributed with this work for additional information
+;; regarding copyright ownership.  The ASF licenses this file
+;; to you under the Apache License, Version 2.0 (the
+;; "License"); you may not use this file except in compliance
+;; with the License.  You may obtain a copy of the License at
+;;
+;; http:;; www.apache.org/licenses/LICENSE-2.0
+;;
+;; Unless required by applicable law or agreed to in writing, software
+;; distributed under the License is distributed on an "AS IS" BASIS,
+;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+;; See the License for the specific language governing permissions and
+;; limitations under the License.
 (ns backtype.storm.ui.core
   (:use compojure.core)
   (:use ring.middleware.reload)
@@ -39,7 +54,7 @@
              :onclick "toggleSys()"}]])
 
 (defn ui-template [body]
-  (html
+  (html4
    [:head
     [:title "Storm UI"]
     (include-css "/css/bootstrap-1.1.0.css")
@@ -103,8 +118,8 @@
       (.get_num_executors t)
       (.get_num_tasks t)
       ])
-   :time-cols [2]
-   :sort-list "[[2,1]]"
+   :time-cols [3]
+   :sort-list "[[0,0]]"
    ))
 
 (defn supervisor-summary-table [summs]
@@ -380,6 +395,10 @@
 (defn component-link [storm-id id]
   (link-to (url-format "/topology/%s/component/%s" storm-id id) (escape-html id)))
 
+(defn worker-log-link [host port]
+  (link-to (url-format "http://%s:%s/log?file=worker-%s.log"
+              host (*STORM-CONF* LOGVIEWER-PORT) port) (str port)))
+
 (defn render-capacity [capacity]
   (let [capacity (nil-to-zero capacity)]
     [:span (if (> capacity 0.9)
@@ -564,7 +583,7 @@
      [(pretty-executor-info (.get_executor_info e))
       (pretty-uptime-sec (.get_uptime_secs e))
       (.get_host e)
-      (.get_port e)
+      (worker-log-link (.get_host e) (.get_port e))
       (nil-to-zero (:emitted stats))
       (nil-to-zero (:transferred stats))
       (float-str (:complete-latencies stats))
@@ -639,7 +658,7 @@
      [(pretty-executor-info (.get_executor_info e))
       (pretty-uptime-sec (.get_uptime_secs e))
       (.get_host e)
-      (.get_port e)
+      (worker-log-link (.get_host e) (.get_port e))
       (nil-to-zero (:emitted stats))
       (nil-to-zero (:transferred stats))
       (render-capacity (compute-executor-capacity e))
@@ -738,9 +757,11 @@
            ui-template))
   (GET "/topology/:id" [:as {cookies :cookies} id & m]
        (let [include-sys? (get-include-sys? cookies)]
-         (-> (topology-page id (:window m) include-sys?)
+         (try
+           (-> (topology-page id (:window m) include-sys?)
              (concat [(mk-system-toggle-button include-sys?)])
-             ui-template)))
+             ui-template)
+           (catch Exception e (resp/redirect "/")))))
   (GET "/topology/:id/component/:component" [:as {cookies :cookies} id component & m]
        (let [include-sys? (get-include-sys? cookies)]
          (-> (component-page id component (:window m) include-sys?)
@@ -799,9 +820,9 @@
         ))))
 
 (def app
-  (-> #'main-routes
-      (wrap-reload '[backtype.storm.ui.core])
-      catch-errors))
+  (handler/site (-> main-routes
+                    (wrap-reload '[backtype.storm.ui.core])
+                    catch-errors)))
 
 (defn start-server! [] (run-jetty app {:port (Integer. (*STORM-CONF* UI-PORT))
                                        :join? false}))

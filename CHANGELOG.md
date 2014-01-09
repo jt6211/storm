@@ -1,4 +1,26 @@
-## Unreleased (0.9.0)
+## 0.9.0.1
+* Update build configuration to force compatibility with Java 1.6
+
+## 0.9.0
+* Fixed a netty client issue where sleep times for reconnection could be negative (thanks brndnmtthws)
+* Fixed an issue that would cause storm-netty unit tests to fail
+
+## 0.9.0-rc3
+* Added configuration to limit ShellBolt internal _pendingWrites queue length (thanks xiaokang)
+* Fixed a a netty client issue where sleep times for reconnection could be negative (thanks brndnmtthws)
+* Fixed a display issue with system stats in Storm UI (thanks d2r)
+* Nimbus now does worker heartbeat timeout checks as soon as heartbeats are updated (thanks d2r)
+* The logviewer now determines log file location by examining the logback configuration (thanks strongh)
+* Allow tick tuples to work with the system bolt (thanks xumingming)
+* Add default configuration values for the netty transport and the ability to configure the number of worker threads (thanks revans2)
+* Added timeout to unit tests to prevent a situation where tests would hang indefinitely (thanks d2r)
+* Fixed and issue in the system bolt where local mode would not be detected accurately (thanks miofthena)
+
+## 0.9.0-rc2 
+
+* Fixed `storm jar` command to work properly when STORM_JAR_JVM_OPTS is not specified (thanks roadkill001)
+
+## 0.9.0-rc1
 
  * All logging now done with slf4j
  * Replaced log4j logging system with logback
@@ -16,6 +38,18 @@
  * Append component name to thread name of running executors so that logs are easier to read
  * Messaging system used for passing messages between workers is now pluggable (thanks anfeng)
  * Netty implementation of messaging (thanks anfeng)
+ * Include topology id, worker port, and worker id in properties for worker processes, useful for logging (thanks d2r)
+ * Tick tuples can now be scheduled using floating point seconds (thanks tscurtu)
+ * Added log viewer daemon and links from UI to logviewers (thanks xiaokang)
+ * DRPC server childopts now configurable (thanks strongh)
+ * Default number of ackers to number of workers, instead of just one (thanks lyogavin)
+ * Validate that Storm configs are of proper types/format/structure (thanks d2r)
+ * FixedBatchSpout will now replay batches appropriately on batch failure (thanks ptgoetz)
+ * Can set JAR_JVM_OPTS env variable to add jvm options when calling 'storm jar' (thanks srmelody)
+ * Throw error if batch id for transaction is behind the batch id in the opaque value (thanks mrflip)
+ * Sort topologies by name in UI (thanks jaked)
+ * Added LoggingMetricsConsumer to log all metrics to a file, by default not enabled (thanks mrflip)
+ * Add prepare(Map conf) method to TopologyValidator (thanks ankitoshniwal)
  * Bug fix: Supervisor provides full path to workers to logging config rather than relative path (thanks revans2) 
  * Bug fix: Call ReducerAggregator#init properly when used within persistentAggregate (thanks lorcan)
  * Bug fix: Set component-specific configs correctly for Trident spouts

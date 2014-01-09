@@ -1,3 +1,18 @@
+;; Licensed to the Apache Software Foundation (ASF) under one
+;; or more contributor license agreements.  See the NOTICE file
+;; distributed with this work for additional information
+;; regarding copyright ownership.  The ASF licenses this file
+;; to you under the Apache License, Version 2.0 (the
+;; "License"); you may not use this file except in compliance
+;; with the License.  You may obtain a copy of the License at
+;;
+;; http:;; www.apache.org/licenses/LICENSE-2.0
+;;
+;; Unless required by applicable law or agreed to in writing, software
+;; distributed under the License is distributed on an "AS IS" BASIS,
+;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+;; See the License for the specific language governing permissions and
+;; limitations under the License.
 (ns backtype.storm.daemon.nimbus
   (:import [org.apache.thrift7.server THsHaServer THsHaServer$Args])
   (:import [org.apache.thrift7.protocol TBinaryProtocol TBinaryProtocol$Factory])
@@ -326,7 +341,7 @@
 ;; Does not assume that clocks are synchronized. Executor heartbeat is only used so that
 ;; nimbus knows when it's received a new heartbeat. All timing is done by nimbus and
 ;; tracked through heartbeat-cache
-(defn- update-executor-cache [curr hb]
+(defn- update-executor-cache [curr hb timeout]
   (let [reported-time (:time-secs hb)
         {last-nimbus-time :nimbus-time
          last-reported-time :executor-reported-time} curr
@@ -338,15 +353,18 @@
                       (current-time-secs)
                       last-nimbus-time
                       )]
-      {:nimbus-time nimbus-time
+      {:is-timed-out (and
+                       nimbus-time
+                       (>= (time-delta nimbus-time) timeout))
+       :nimbus-time nimbus-time
        :executor-reported-time reported-time}))
 
-(defn update-heartbeat-cache [cache executor-beats all-executors]
+(defn update-heartbeat-cache [cache executor-beats all-executors timeout]
   (let [cache (select-keys cache all-executors)]
     (into {}
       (for [executor all-executors :let [curr (cache executor)]]
         [executor
-         (update-executor-cache curr (get executor-beats executor))]
+         (update-executor-cache curr (get executor-beats executor) timeout)]
          ))))
 
 (defn update-heartbeats! [nimbus storm-id all-executors existing-assignment]
@@ -355,7 +373,8 @@
         executor-beats (.executor-beats storm-cluster-state storm-id (:executor->node+port existing-assignment))
         cache (update-heartbeat-cache (@(:heartbeats-cache nimbus) storm-id)
                                       executor-beats
-                                      all-executors)]
+                                      all-executors
+                                      ((:conf nimbus) NIMBUS-TASK-TIMEOUT-SECS))]
       (swap! (:heartbeats-cache nimbus) assoc storm-id cache)))
 
 (defn- update-all-heartbeats! [nimbus existing-assignments topology->executors]
@@ -380,14 +399,12 @@
     (->> all-executors
         (filter (fn [executor]
           (let [start-time (get executor-start-times executor)
-                nimbus-time (-> heartbeats-cache (get executor) :nimbus-time)]
+                is-timed-out (-> heartbeats-cache (get executor) :is-timed-out)]
             (if (and start-time
                    (or
                     (< (time-delta start-time)
                        (conf NIMBUS-TASK-LAUNCH-SECS))
-                    (not nimbus-time)
-                    (< (time-delta nimbus-time)
-                       (conf NIMBUS-TASK-TIMEOUT-SECS))
+                    (not is-timed-out)
                     ))
               true
               (do
@@ -855,7 +872,10 @@
 (defn validate-topology-name! [name]
   (if (some #(.contains name %) DISALLOWED-TOPOLOGY-NAME-STRS)
     (throw (InvalidTopologyException.
-            (str "Topology name cannot contain any of the following: " (pr-str DISALLOWED-TOPOLOGY-NAME-STRS))))))
+            (str "Topology name cannot contain any of the following: " (pr-str DISALLOWED-TOPOLOGY-NAME-STRS))))
+  (if (clojure.string/blank? name) 
+    (throw (InvalidTopologyException. 
+            ("Topology name cannot be blank"))))))
 
 (defn- try-read-storm-conf [conf storm-id]
   (try-cause
@@ -877,6 +897,7 @@
   (.prepare inimbus conf (master-inimbus-dir conf))
   (log-message "Starting Nimbus with conf " conf)
   (let [nimbus (nimbus-data conf inimbus)]
+    (.prepare ^backtype.storm.nimbus.ITopologyValidator (:validator nimbus) conf)
     (cleanup-corrupt-topologies! nimbus)
     (doseq [storm-id (.active-storms (:storm-cluster-state nimbus))]
       (transition! nimbus storm-id :startup))
@@ -1131,14 +1152,13 @@
         options (-> (TNonblockingServerSocket. (int (conf NIMBUS-THRIFT-PORT)))
                     (THsHaServer$Args.)
                     (.workerThreads 64)
-                    (.protocolFactory (TBinaryProtocol$Factory.))
+                    (.protocolFactory (TBinaryProtocol$Factory. false true (conf NIMBUS-THRIFT-MAX-BUFFER-SIZE)))
                     (.processor (Nimbus$Processor. service-handler))
                     )
-       server (THsHaServer. options)]
+       server (THsHaServer. (do (set! (. options maxReadBufferBytes)(conf NIMBUS-THRIFT-MAX-BUFFER-SIZE)) options))]
     (.addShutdownHook (Runtime/getRuntime) (Thread. (fn [] (.shutdown service-handler) (.stop server))))
     (log-message "Starting Nimbus server...")
     (.serve server)))
-
 
 ;; distributed implementation
 

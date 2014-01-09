@@ -1,3 +1,18 @@
+;; Licensed to the Apache Software Foundation (ASF) under one
+;; or more contributor license agreements.  See the NOTICE file
+;; distributed with this work for additional information
+;; regarding copyright ownership.  The ASF licenses this file
+;; to you under the Apache License, Version 2.0 (the
+;; "License"); you may not use this file except in compliance
+;; with the License.  You may obtain a copy of the License at
+;;
+;; http:;; www.apache.org/licenses/LICENSE-2.0
+;;
+;; Unless required by applicable law or agreed to in writing, software
+;; distributed under the License is distributed on an "AS IS" BASIS,
+;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+;; See the License for the specific language governing permissions and
+;; limitations under the License.
 (ns backtype.storm.timer
   (:import [backtype.storm.utils Time])
   (:import [java.util PriorityQueue Comparator])
@@ -24,14 +39,22 @@
                       (fn []
                         (while @active
                           (try
-                            (let [[time-secs _ _ :as elem] (locking lock (.peek queue))]
-                              (if (and elem (>= (current-time-secs) time-secs))
+                            (let [[time-millis _ _ :as elem] (locking lock (.peek queue))]
+                              (if (and elem (>= (current-time-millis) time-millis))
                                 ;; imperative to not run the function inside the timer lock
                                 ;; otherwise, it's possible to deadlock if function deals with other locks
                                 ;; (like the submit lock)
                                 (let [afn (locking lock (second (.poll queue)))]
                                   (afn))
-                                (Time/sleep 1000)
+                                (if time-millis ;; if any events are scheduled
+                                  ;; sleep until event generation
+                                  ;; note that if any recurring events are scheduled then we will always go through
+                                  ;; this branch, sleeping only the exact necessary amount of time
+                                  (Time/sleep (- time-millis (current-time-millis)))
+                                  ;; else poll to see if any new event was scheduled
+                                  ;; this is in essence the response time for detecting any new event schedulings when
+                                  ;; there are no scheduled events
+                                  (Time/sleep 1000))
                                 ))
                             (catch Throwable t
                               ;; because the interrupted exception can be wrapped in a runtimeexception
@@ -59,7 +82,7 @@
   (let [id (uuid)
         ^PriorityQueue queue (:queue timer)]
     (locking (:lock timer)
-      (.add queue [(+ (current-time-secs) delay-secs) afn id])
+      (.add queue [(+ (current-time-millis) (* 1000 (long delay-secs))) afn id])
       )))
 
 (defn schedule-recurring [timer delay-secs recur-secs afn]
